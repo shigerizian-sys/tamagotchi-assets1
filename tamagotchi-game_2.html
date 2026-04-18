@@ -303,10 +303,10 @@ const DECAY_PER_SEC = { hunger: 3, energy: 3, happiness: 3, cleanliness: 3 };
 const DECAY = { hunger: 180, energy: 180, happiness: 180, cleanliness: 180 };
 
 const STAGES = [
-  { id: 'bronze',  name: '銅のバヤシ', emoji: '🥉', minMin: 0,   ring: 0xcd7f32, op: 0.7 },
-  { id: 'silver',  name: '銀のバヤシ', emoji: '🥈', minMin: 1.5, ring: 0xd8d8d8, op: 0.85 },
-  { id: 'gold',    name: '金のバヤシ', emoji: '🥇', minMin: 3,   ring: 0xffd700, op: 1.0 },
-  { id: 'rainbow', name: '虹のバヤシ', emoji: '🌈', minMin: 5,   ring: null,     op: 1.0 }
+  { id: 'bronze',  name: '銅のバヤシ', emoji: '🥉', minMin: 0,   ring: 0xcd7f32, op: 0.7,  tint: null,       tintStr: 0,    decay: 3 },
+  { id: 'silver',  name: '銀のバヤシ', emoji: '🥈', minMin: 1.5, ring: 0xd8d8d8, op: 0.85, tint: 0xe8e8ff,   tintStr: 0.35, decay: 5 },
+  { id: 'gold',    name: '金のバヤシ', emoji: '🥇', minMin: 3,   ring: 0xffd700, op: 1.0,  tint: 0xffd700,   tintStr: 0.6,  decay: 7 },
+  { id: 'rainbow', name: '虹のバヤシ', emoji: '🌈', minMin: 5,   ring: null,     op: 1.0,  tint: 'rainbow',  tintStr: 0.9,  decay: 10 }
 ];
 
 const ACTION_KWS = {
@@ -406,6 +406,60 @@ ring.rotation.x = -Math.PI/2;
 ring.position.y = 0.001;
 scene.add(ring);
 
+// Aura sprite behind character (changes color per stage)
+function makeAuraTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const g = ctx.createRadialGradient(128, 128, 20, 128, 128, 120);
+  g.addColorStop(0,   'rgba(255,255,255,0.9)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.4)');
+  g.addColorStop(1,   'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(canvas);
+}
+const auraTexture = makeAuraTexture();
+const auraMat = new THREE.SpriteMaterial({
+  map: auraTexture,
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+const auraSprite = new THREE.Sprite(auraMat);
+auraSprite.scale.set(2.2, 2.2, 1);
+auraSprite.position.set(0, 0.9, -0.1);
+scene.add(auraSprite);
+
+// Function to apply evolution tint to character
+function applyCharacterTint(stage) {
+  if (!character) return;
+  character.traverse((c) => {
+    if (c.isMesh && c.material) {
+      const mats = Array.isArray(c.material) ? c.material : [c.material];
+      mats.forEach(m => {
+        if (!m.emissive) return;
+        if (!m.userData.origEmissive) {
+          m.userData.origEmissive = new THREE.Color(0x000000);
+          m.userData.origEmissiveIntensity = 1;
+        }
+        if (stage.tint === null) {
+          m.emissive.copy(m.userData.origEmissive);
+          m.emissiveIntensity = m.userData.origEmissiveIntensity;
+        } else if (stage.tint === 'rainbow') {
+          // Color set per-frame in animate loop
+          m.emissiveIntensity = stage.tintStr;
+        } else {
+          m.emissive.setHex(stage.tint);
+          m.emissiveIntensity = stage.tintStr;
+        }
+      });
+    }
+  });
+}
+
 new GLTFLoader().load(GLB_URL, (gltf) => {
   character = gltf.scene;
   character.traverse((c) => {
@@ -414,6 +468,11 @@ new GLTFLoader().load(GLB_URL, (gltf) => {
       mats.forEach(m => {
         if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
         if (m.emissiveMap) m.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+        // Save original emissive color for evolution effects
+        if (m.emissive) {
+          m.userData.origEmissive = m.emissive.clone();
+          m.userData.origEmissiveIntensity = m.emissiveIntensity ?? 1;
+        }
         m.needsUpdate = true;
       });
     }
@@ -531,14 +590,14 @@ function updateStageUI() {
     const needed = next.minMin - cur.minMin;
     $('stage-progress-fill').style.width = Math.min(100, (elapsed/needed)*100) + '%';
     const r = Math.max(0, next.minMin - aliveMin());
-    $('stage-next-text').textContent = `次: ${next.emoji} ${next.name.replace('のバヤシ','')} まで ${r < 1 ? Math.ceil(r*60)+'秒' : Math.ceil(r)+'分'}`;
+    $('stage-next-text').textContent = `次: ${next.emoji} ${next.name.replace('のバヤシ','')} まで ${r < 1 ? Math.ceil(r*60)+'秒' : Math.ceil(r)+'分'} ・ ⚠️毎秒-${cur.decay}`;
   } else {
     $('stage-progress-fill').style.width = '100%';
-    $('stage-next-text').textContent = '🌟 最強のバヤシ！';
+    $('stage-next-text').textContent = `🌟 最強のバヤシ！ ・ ⚠️毎秒-${cur.decay}`;
   }
 
   if (lastStageId !== null && cur.id !== lastStageId) {
-    showMessage(`✨ ${cur.name}に しんかした！`);
+    showMessage(`✨ ${cur.name}に しんかした！(毎秒-${cur.decay})`);
     spawnParts(['✨','🎉','⭐',cur.emoji,'💫']);
     if (cur.id === 'rainbow' && !stats.cleared) {
       stats.cleared = true;
@@ -552,6 +611,23 @@ function updateStageUI() {
 
   if (cur.id !== 'rainbow' && cur.ring != null) ringMat.color.setHex(cur.ring);
   ringMat.opacity = cur.op;
+
+  // Apply character tint
+  applyCharacterTint(cur);
+
+  // Update aura
+  if (cur.id === 'bronze') {
+    auraMat.opacity = 0;
+  } else if (cur.id === 'silver') {
+    auraMat.color.setHex(0xe8e8ff);
+    auraMat.opacity = 0.45;
+  } else if (cur.id === 'gold') {
+    auraMat.color.setHex(0xffd700);
+    auraMat.opacity = 0.7;
+  } else {
+    // rainbow — color set per frame
+    auraMat.opacity = 0.85;
+  }
 }
 
 function showMessage(t) {
@@ -746,8 +822,29 @@ function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
 
-  if (getCurrentStage().id === 'rainbow') {
-    ringMat.color.setHSL((performance.now() * 0.0003) % 1, 0.9, 0.6);
+  const curStage = getCurrentStage();
+
+  // Rainbow stage: dynamic color on ring, character emissive, and aura
+  if (curStage.id === 'rainbow') {
+    const hue = (performance.now() * 0.0003) % 1;
+    ringMat.color.setHSL(hue, 0.9, 0.6);
+    auraMat.color.setHSL(hue, 0.9, 0.6);
+    if (character) {
+      character.traverse((c) => {
+        if (c.isMesh && c.material) {
+          const mats = Array.isArray(c.material) ? c.material : [c.material];
+          mats.forEach(m => {
+            if (m.emissive) m.emissive.setHSL(hue, 0.9, 0.45);
+          });
+        }
+      });
+    }
+  }
+
+  // Aura gentle pulse (silver/gold/rainbow)
+  if (curStage.id !== 'bronze' && auraMat.opacity > 0) {
+    const pulse = 0.85 + Math.sin(performance.now() * 0.003) * 0.15;
+    auraSprite.scale.set(2.2 * pulse, 2.2 * pulse, 1);
   }
 
   if (stats.isDead) {
@@ -842,10 +939,11 @@ $('btn-reset').addEventListener('click', async () => {
 // ==================== TIMERS ====================
 setInterval(async () => {
   if (!stats.started || stats.isDead) { updateStageUI(); return; }
-  stats.hunger = Math.max(0, stats.hunger - DECAY_PER_SEC.hunger);
-  stats.energy = Math.max(0, stats.energy - DECAY_PER_SEC.energy);
-  stats.happiness = Math.max(0, stats.happiness - DECAY_PER_SEC.happiness);
-  stats.cleanliness = Math.max(0, stats.cleanliness - DECAY_PER_SEC.cleanliness);
+  const d = getCurrentStage().decay;
+  stats.hunger = Math.max(0, stats.hunger - d);
+  stats.energy = Math.max(0, stats.energy - d);
+  stats.happiness = Math.max(0, stats.happiness - d);
+  stats.cleanliness = Math.max(0, stats.cleanliness - d);
   updateUI();
   updateStageUI();
   if (anyStatZero()) {
