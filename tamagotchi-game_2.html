@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>バヤシっち</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Hiragino Maru Gothic ProN', 'Yu Gothic', 'Meiryo', system-ui, sans-serif;
+    background: linear-gradient(135deg, #ffd6ec 0%, #c7e0ff 50%, #d6f5e8 100%);
+    min-height: 100vh;
+    padding: 16px;
+    color: #3a3a5c;
+  }
+  .container {
+    max-width: 520px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(12px);
+    border-radius: 28px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(180, 140, 200, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+  }
+  h1 {
+    text-align: center;
+    font-size: 24px;
+    margin-bottom: 4px;
+    background: linear-gradient(90deg, #ff6fa3, #7a8fff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 800;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: #8b7aa3;
+    margin-bottom: 14px;
+  }
+  .stage {
+    position: relative;
+    width: 100%;
+    height: 340px;
+    background: linear-gradient(180deg, #e7f0ff 0%, #fff0f8 100%);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: inset 0 4px 12px rgba(150, 130, 180, 0.15);
+    margin-bottom: 14px;
+  }
+  #canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .loading {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #8b7aa3;
+  }
+  .loading .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid #ffd6ec;
+    border-top-color: #ff6fa3;
+    border-radius: 50%;
+    margin: 0 auto 10px;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .message {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #ff6fa3;
+    box-shadow: 0 4px 12px rgba(255, 111, 163, 0.25);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .message.show { opacity: 1; transform: translateX(-50%) translateY(4px); }
+
+  .mood {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #7a8fff;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .stat {
+    background: rgba(255, 255, 255, 0.85);
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+  .stat-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: #5a4a7a;
+  }
+  .stat-label span:last-child { font-variant-numeric: tabular-nums; }
+
+  .particle {
+    position: absolute;
+    font-size: 28px;
+    pointer-events: none;
+    animation: float-up 1.8s ease-out forwards;
+    z-index: 5;
+  }
+  @keyframes float-up {
+    0%   { transform: translate(-50%, 0) scale(0.3); opacity: 0; }
+    20%  { transform: translate(-50%, -15px) scale(1.1); opacity: 1; }
+    100% { transform: translate(-50%, -130px) scale(0.7); opacity: 0; }
+  }
+  .bar {
+    height: 8px;
+    background: rgba(150, 130, 180, 0.15);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.4s ease, background 0.3s;
+    background: linear-gradient(90deg, #7aff9f, #4adf7e);
+  }
+  .bar-fill.mid { background: linear-gradient(90deg, #ffd97a, #ffb94a); }
+  .bar-fill.low { background: linear-gradient(90deg, #ff9a9a, #ff5c5c); }
+
+  .actions {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  button.action {
+    background: white;
+    border: none;
+    border-radius: 16px;
+    padding: 14px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #5a4a7a;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 3px 8px rgba(150, 130, 180, 0.18);
+    font-family: inherit;
+  }
+  button.action:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(150, 130, 180, 0.25); }
+  button.action:active { transform: translateY(0); }
+  button.action .emoji { display: block; font-size: 22px; margin-bottom: 3px; }
+
+  .reset {
+    display: block;
+    margin: 12px auto 0;
+    background: none;
+    border: none;
+    color: #bba;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+    font-family: inherit;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>バヤシっち</h1>
+  <p class="subtitle">かわいいバヤシをお世話しよう</p>
+
+  <div class="stage">
+    <canvas id="canvas"></canvas>
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <div>よみこみちゅう…</div>
+    </div>
+    <div id="message" class="message"></div>
+    <div id="mood" class="mood">😊 げんき</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label"><span>🍚 おなか</span><span id="hunger-val">100</span></div>
+      <div class="bar"><div id="hunger-bar" class="bar-fill" style="width:100%"></div></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label"><span>⚡ げんき</span><span id="energy-val">100</span></div>
+      <div class="bar"><div id="energy-bar" class="bar-fill" style="width:100%"></div></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label"><span>💕 きげん</span><span id="happy-val">100</span></div>
+      <div class="bar"><div id="happy-bar" class="bar-fill" style="width:100%"></div></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label"><span>🛁 せいけつ</span><span id="clean-val">100</span></div>
+      <div class="bar"><div id="clean-bar" class="bar-fill" style="width:100%"></div></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="action" data-action="feed"><span class="emoji">🍚</span>ごはん</button>
+    <button class="action" data-action="play"><span class="emoji">🎾</span>あそぶ</button>
+    <button class="action" data-action="sleep"><span class="emoji">💤</span>ねる</button>
+    <button class="action" data-action="bath"><span class="emoji">🛁</span>おふろ</button>
+    <button class="action" data-action="pet"><span class="emoji">💖</span>なでる</button>
+  </div>
+
+  <button class="reset" id="reset-btn">セーブデータをリセット</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const GLB_URL = 'https://raw.githubusercontent.com/shigerizian-sys/tamagotchi-assets1/main/2.glb';
+const STORAGE_KEY = 'tamagotchi-v1';
+
+// Storage wrapper: works in Claude artifact, local browser, and GitHub Pages
+const storage = {
+  async get(key) {
+    try {
+      if (window.storage && window.storage.get) {
+        return await window.storage.get(key);
+      }
+    } catch (e) {}
+    try {
+      const val = localStorage.getItem(key);
+      return val ? { key, value: val } : null;
+    } catch (e) { return null; }
+  },
+  async set(key, value) {
+    try {
+      if (window.storage && window.storage.set) {
+        return await window.storage.set(key, value);
+      }
+    } catch (e) {}
+    try {
+      localStorage.setItem(key, value);
+      return { key, value };
+    } catch (e) { return null; }
+  }
+};
+
+// ----------------------------
+// Three.js setup
+// ----------------------------
+const canvas = document.getElementById('canvas');
+const stage = canvas.parentElement;
+
+const scene = new THREE.Scene();
+scene.background = null;
+
+const camera = new THREE.PerspectiveCamera(50, stage.clientWidth / stage.clientHeight, 0.1, 100);
+camera.position.set(0, 1.3, 3.5);
+camera.lookAt(0, 0.9, 0);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+// Camera controls: drag to rotate, wheel to zoom
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.9, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 1.8;
+controls.maxDistance = 7;
+controls.minPolarAngle = 0.2;
+controls.maxPolarAngle = Math.PI / 2 - 0.05;
+controls.enablePan = false;
+controls.update();
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+dir.position.set(3, 6, 4);
+scene.add(dir);
+const rim = new THREE.DirectionalLight(0xffe8f5, 0.8);
+rim.position.set(-4, 3, -3);
+scene.add(rim);
+const front = new THREE.DirectionalLight(0xffffff, 0.6);
+front.position.set(0, 2, 5);
+scene.add(front);
+
+// Ground (cute circular platform)
+const groundGeo = new THREE.CircleGeometry(1.1, 48);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0xffc7dd, roughness: 0.9 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = 0;
+scene.add(ground);
+
+// Subtle ring
+const ringGeo = new THREE.RingGeometry(1.05, 1.18, 48);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+const ring = new THREE.Mesh(ringGeo, ringMat);
+ring.rotation.x = -Math.PI / 2;
+ring.position.y = 0.001;
+scene.add(ring);
+
+// Character
+let character = null;
+let mixer = null;
+let animClips = {};         // name(lowercase) -> AnimationClip
+let currentAction = null;   // current THREE.AnimationAction
+let defaultAnimName = null; // idle/walk animation to return to
+let walkSpeed = 1.0;
+let charAngle = 0;
+let baseScale = 1;
+let actionState = null; // { type, timer, duration, useAnim } or null
+const walkRadius = 0.6;
+const ACTION_DURATIONS = { feed: 2.5, play: 3.0, sleep: 4.0, bath: 3.0, pet: 1.8 };
+
+// Map action -> candidate animation name keywords (matched partial, case-insensitive)
+// Empty array = intentionally use code-based fallback animation
+const ACTION_ANIM_KEYWORDS = {
+  feed:  [], // no food anim in GLB → code bounce
+  play:  [
+    'happy_jump', 'cardio_dance', 'jazz_danc', 'superlove_pop_dance',
+    'shake_it_off', 'omg_groove', 'gangnam_groove', 'you_groove',
+    'clapping_run', 'arm_circle_shuffle', 'crystal_beads', 'dont_you_dare'
+  ],
+  sleep: [], // user preference: use code-based falling-over instead
+  bath:  [], // no bath anim in GLB → code bob
+  pet:   ['wave_one_hand', 'wave']
+};
+
+function findClipName(keywords) {
+  const names = Object.keys(animClips);
+  for (const kw of keywords) {
+    const found = names.find(n => n.includes(kw));
+    if (found) return found;
+  }
+  return null;
+}
+
+// Return all matching clip names (for randomization)
+function findAllClipNames(keywords) {
+  const names = Object.keys(animClips);
+  const matched = new Set();
+  for (const kw of keywords) {
+    names.forEach(n => { if (n.includes(kw)) matched.add(n); });
+  }
+  return Array.from(matched);
+}
+
+function playAnimation(name, loop = true, fade = 0.3) {
+  if (!mixer || !animClips[name]) return null;
+  const newAction = mixer.clipAction(animClips[name]);
+  if (currentAction && currentAction !== newAction) {
+    currentAction.fadeOut(fade);
+  }
+  newAction.reset();
+  newAction.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
+  newAction.clampWhenFinished = !loop;
+  newAction.fadeIn(fade);
+  newAction.play();
+  currentAction = newAction;
+  return newAction;
+}
+
+const loader = new GLTFLoader();
+loader.load(
+  GLB_URL,
+  (gltf) => {
+    character = gltf.scene;
+
+    // Fix texture color space & diagnose material issues
+    let meshCount = 0;
+    let texturedCount = 0;
+    character.traverse((child) => {
+      if (child.isMesh && child.material) {
+        meshCount++;
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((mat) => {
+          // Ensure sRGB color space for color textures
+          if (mat.map) {
+            mat.map.colorSpace = THREE.SRGBColorSpace;
+            texturedCount++;
+          }
+          if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+          // Boost material brightness for cartoon-style rendering
+          if (mat.isMeshStandardMaterial) {
+            mat.roughness = Math.min(1, (mat.roughness ?? 0.5) * 1.1);
+            mat.metalness = Math.min(1, (mat.metalness ?? 0.5) * 0.3);
+          }
+          mat.needsUpdate = true;
+        });
+      }
+    });
+    console.log(`[バヤシっち] メッシュ数: ${meshCount}, テクスチャ付き: ${texturedCount}`);
+    if (texturedCount === 0) {
+      console.warn('[バヤシっち] テクスチャが見つかりません。GLBにテクスチャが埋め込まれていない可能性があります。');
+    }
+
+    // Fit and center
+    const box = new THREE.Box3().setFromObject(character);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    baseScale = 1.2 / maxDim;
+    character.scale.setScalar(baseScale);
+
+    // Re-measure after scaling and place feet on ground
+    const box2 = new THREE.Box3().setFromObject(character);
+    const size2 = box2.getSize(new THREE.Vector3());
+    const center2 = box2.getCenter(new THREE.Vector3());
+    character.position.x -= center2.x;
+    character.position.z -= center2.z;
+    character.position.y -= box2.min.y;
+
+    scene.add(character);
+
+    // Animation: load all clips and pick default
+    if (gltf.animations && gltf.animations.length > 0) {
+      mixer = new THREE.AnimationMixer(character);
+      gltf.animations.forEach((clip) => {
+        animClips[clip.name.toLowerCase()] = clip;
+      });
+      const foundNames = Object.keys(animClips);
+      console.log(`[バヤシっち] アニメ数: ${foundNames.length}`);
+      console.log(`[バヤシっち] アニメ名一覧:`, foundNames);
+
+      // Pick default animation (prefer idle, then walk)
+      defaultAnimName =
+        findClipName(['idle', 'stand', 'wait', '待機', '立']) ||
+        findClipName(['walk', 'walking', '歩く', '歩']) ||
+        foundNames[0];
+      if (defaultAnimName) {
+        console.log(`[バヤシっち] デフォルト: ${defaultAnimName}`);
+        playAnimation(defaultAnimName, true, 0);
+      }
+    }
+
+    document.getElementById('loading').style.display = 'none';
+  },
+  undefined,
+  (err) => {
+    console.error(err);
+    document.getElementById('loading').innerHTML = '<div style="color:#ff6fa3">読み込みに失敗しました。<br>URLをご確認ください。</div>';
+  }
+);
+
+// Resize handling
+function resize() {
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Render loop
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  let mixerSpeed = walkSpeed;
+
+  // Action state handling
+  let idleSway = true;
+  if (character && actionState) {
+    actionState.timer += delta;
+    const progress = actionState.timer / actionState.duration;
+
+    if (progress >= 1) {
+      // End of action — reset character transforms
+      character.scale.setScalar(baseScale);
+      character.rotation.set(0, 0, 0);
+      character.position.set(0, 0, 0);
+      // Return to default looping animation
+      if (actionState.useAnim && defaultAnimName) {
+        playAnimation(defaultAnimName, true, 0.4);
+      }
+      actionState = null;
+    } else if (actionState.useAnim) {
+      // Dedicated animation clip is playing — let it drive motion
+      mixerSpeed = 1;
+      idleSway = false;
+    } else {
+      idleSway = false;
+      // Fallback: code-based reactions when no matching clip exists
+      switch (actionState.type) {
+        case 'feed': {
+          mixerSpeed = 0.3;
+          const b = Math.sin(actionState.timer * 14) * 0.08;
+          character.scale.set(
+            baseScale * (1 - b * 0.3),
+            baseScale * (1 + b),
+            baseScale * (1 - b * 0.3)
+          );
+          break;
+        }
+        case 'play': {
+          mixerSpeed = 2.4;
+          character.position.y = Math.abs(Math.sin(actionState.timer * 8)) * 0.15;
+          character.rotation.y = Math.sin(actionState.timer * 4) * 0.4;
+          break;
+        }
+        case 'sleep': {
+          mixerSpeed = 0;  // freeze walking animation during fall-over
+          const tilt = Math.min(progress * 2.5, 1);
+          character.rotation.x = -Math.PI / 2 * tilt;
+          break;
+        }
+        case 'bath': {
+          mixerSpeed = 0.2;
+          character.position.y = Math.abs(Math.sin(actionState.timer * 5)) * 0.1;
+          break;
+        }
+        case 'pet': {
+          mixerSpeed = 1.5;
+          character.position.y = Math.abs(Math.sin(actionState.timer * 10)) * 0.25;
+          break;
+        }
+      }
+    }
+  }
+
+  if (mixer) mixer.update(delta * mixerSpeed);
+
+  // Idle: gentle sway side to side, facing camera
+  if (character && idleSway && !actionState) {
+    character.position.set(0, 0, 0);
+    character.rotation.x = 0;
+    character.rotation.z = 0;
+    character.rotation.y = Math.sin(performance.now() * 0.0008) * 0.15;
+  }
+
+  controls.update();
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ----------------------------
+// Particle effects
+// ----------------------------
+const PARTICLE_EMOJIS = {
+  feed: ['🍚', '🍙', '🍘', '✨'],
+  play: ['🎾', '⚽', '🎮', '⭐'],
+  sleep: ['💤', '😴', '✨'],
+  bath: ['🫧', '💧', '✨', '🛁'],
+  pet: ['💖', '💕', '❤️', '✨']
+};
+
+function spawnParticles(type) {
+  const emojis = PARTICLE_EMOJIS[type] || ['✨'];
+  for (let i = 0; i < 6; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'particle';
+      el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      el.style.left = (42 + Math.random() * 16) + '%';
+      el.style.top = (55 + Math.random() * 10) + '%';
+      stage.appendChild(el);
+      setTimeout(() => el.remove(), 1900);
+    }, i * 140);
+  }
+}
+
+function triggerActionAnimation(type) {
+  spawnParticles(type);
+
+  const duration = ACTION_DURATIONS[type] || 2;
+  const candidates = ACTION_ANIM_KEYWORDS[type] || [];
+  const matches = findAllClipNames(candidates);
+
+  // Pick a random match (gives variety for "play" with many dances)
+  const animName = matches.length > 0
+    ? matches[Math.floor(Math.random() * matches.length)]
+    : null;
+
+  if (animName) {
+    // Dedicated animation exists — play it
+    console.log(`[バヤシっち] ${type} → ${animName} 再生`);
+    const clipDuration = animClips[animName].duration;
+    actionState = {
+      type,
+      timer: 0,
+      duration: Math.max(clipDuration, 1.2),
+      useAnim: true
+    };
+    playAnimation(animName, false, 0.2);
+  } else {
+    // Fall back to code-based motion
+    actionState = { type, timer: 0, duration, useAnim: false };
+  }
+}
+
+// ----------------------------
+// Mood-based auto animations
+// ----------------------------
+const MOOD_ANIMATIONS = {
+  hungry: {
+    clips: ['angry_ground_stomp'],
+    message: 'おなかすいた…💢',
+    particles: ['💢', '💦', '😤', '💨']
+  },
+  tired: {
+    clips: ['sit_lie_bed', 'sit_cross_legged_on_floor'],
+    message: 'つかれた…💤',
+    particles: ['💤', '😴', '✨']
+  },
+  sad: {
+    clips: ['sit_cross_legged_on_floor'],
+    message: 'さみしい…',
+    particles: ['💧', '😢', '🥺']
+  },
+  dirty: {
+    clips: [], // no bath anim available, particles only
+    message: 'おふろに入りたい…',
+    particles: ['💨', '🌀', '💧']
+  },
+  joyful: {
+    clips: [
+      'happy_jump_m', 'cardio_dance', 'superlove_pop_dance',
+      'omg_groove', 'clapping_run', 'shake_it_off_dance'
+    ],
+    message: 'うれしい！🎉',
+    particles: ['✨', '💖', '🌟', '🎉']
+  }
+};
+
+let lastMoodTrigger = 0;
+const MOOD_COOLDOWN_MS = 20000; // 20s between mood anims
+
+function spawnCustomParticles(emojis) {
+  for (let i = 0; i < 5; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'particle';
+      el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      el.style.left = (42 + Math.random() * 16) + '%';
+      el.style.top = (55 + Math.random() * 10) + '%';
+      stage.appendChild(el);
+      setTimeout(() => el.remove(), 1900);
+    }, i * 140);
+  }
+}
+
+function triggerMoodAnimation(moodKey) {
+  const mood = MOOD_ANIMATIONS[moodKey];
+  if (!mood) return;
+
+  showMessage(mood.message);
+  spawnCustomParticles(mood.particles);
+
+  const available = mood.clips.filter((name) => animClips[name]);
+  if (available.length > 0) {
+    const animName = available[Math.floor(Math.random() * available.length)];
+    const clipDuration = animClips[animName].duration;
+    console.log(`[バヤシっち] 気分: ${moodKey} → ${animName}`);
+    actionState = {
+      type: 'mood_' + moodKey,
+      timer: 0,
+      duration: Math.max(clipDuration, 2),
+      useAnim: true
+    };
+    playAnimation(animName, false, 0.4);
+  } else {
+    console.log(`[バヤシっち] 気分: ${moodKey} (anim無し、メッセージのみ)`);
+  }
+}
+
+function checkMood() {
+  if (actionState) return; // don't interrupt action
+  const now = Date.now();
+  if (now - lastMoodTrigger < MOOD_COOLDOWN_MS) return;
+
+  const { hunger, energy, happiness, cleanliness } = stats;
+  const avg = (hunger + energy + happiness + cleanliness) / 4;
+
+  let moodKey = null;
+  // Priority: worst problem first
+  if (hunger < 25) moodKey = 'hungry';
+  else if (energy < 25) moodKey = 'tired';
+  else if (happiness < 25) moodKey = 'sad';
+  else if (cleanliness < 25) moodKey = 'dirty';
+  else if (avg > 80 && Math.random() < 0.5) moodKey = 'joyful';
+
+  if (moodKey) {
+    triggerMoodAnimation(moodKey);
+    lastMoodTrigger = now;
+  }
+}
+
+// Run mood check every 10 seconds
+setInterval(checkMood, 10000);
+
+// ----------------------------
+// Game logic
+// ----------------------------
+const DEFAULTS = { hunger: 90, energy: 90, happiness: 90, cleanliness: 90, lastUpdate: Date.now() };
+let stats = { ...DEFAULTS };
+
+// Decay rates (points lost per minute of real time)
+const DECAY = { hunger: 3, energy: 2, happiness: 2, cleanliness: 1.5 };
+
+async function loadStats() {
+  try {
+    const res = await storage.get(STORAGE_KEY);
+    if (res && res.value) {
+      const saved = JSON.parse(res.value);
+      const now = Date.now();
+      const minutesElapsed = Math.max(0, (now - (saved.lastUpdate || now)) / 60000);
+      stats = {
+        hunger: Math.max(0, (saved.hunger ?? 90) - DECAY.hunger * minutesElapsed),
+        energy: Math.max(0, (saved.energy ?? 90) - DECAY.energy * minutesElapsed),
+        happiness: Math.max(0, (saved.happiness ?? 90) - DECAY.happiness * minutesElapsed),
+        cleanliness: Math.max(0, (saved.cleanliness ?? 90) - DECAY.cleanliness * minutesElapsed),
+        lastUpdate: now
+      };
+    }
+  } catch (e) {
+    // No saved data yet — use defaults
+  }
+  updateUI();
+}
+
+async function saveStats() {
+  stats.lastUpdate = Date.now();
+  try {
+    await storage.set(STORAGE_KEY, JSON.stringify(stats));
+  } catch (e) {
+    console.warn('Save failed', e);
+  }
+}
+
+function clamp(v) { return Math.max(0, Math.min(100, v)); }
+
+function updateBar(id, value) {
+  const bar = document.getElementById(id + '-bar');
+  const val = document.getElementById(id + '-val');
+  bar.style.width = value + '%';
+  val.textContent = Math.round(value);
+  bar.classList.remove('mid', 'low');
+  if (value < 30) bar.classList.add('low');
+  else if (value < 60) bar.classList.add('mid');
+}
+
+function updateMood() {
+  const { hunger, energy, happiness, cleanliness } = stats;
+  const avg = (hunger + energy + happiness + cleanliness) / 4;
+  const mood = document.getElementById('mood');
+
+  if (hunger < 20) {
+    mood.textContent = '🍚 おなかすいた';
+    walkSpeed = 0.4;
+  } else if (energy < 20) {
+    mood.textContent = '😴 つかれた';
+    walkSpeed = 0.3;
+  } else if (happiness < 20) {
+    mood.textContent = '😢 さみしい';
+    walkSpeed = 0.4;
+  } else if (cleanliness < 20) {
+    mood.textContent = '💧 おふろほしい';
+    walkSpeed = 0.6;
+  } else if (avg > 80) {
+    mood.textContent = '🥰 とってもごきげん';
+    walkSpeed = 1.4;
+  } else if (avg > 60) {
+    mood.textContent = '😊 げんき';
+    walkSpeed = 1.0;
+  } else {
+    mood.textContent = '😐 ちょっとつかれた';
+    walkSpeed = 0.7;
+  }
+}
+
+function updateUI() {
+  updateBar('hunger', stats.hunger);
+  updateBar('energy', stats.energy);
+  updateBar('happy', stats.happiness);
+  updateBar('clean', stats.cleanliness);
+  updateMood();
+}
+
+function showMessage(text) {
+  const msg = document.getElementById('message');
+  msg.textContent = text;
+  msg.classList.add('show');
+  clearTimeout(showMessage._t);
+  showMessage._t = setTimeout(() => msg.classList.remove('show'), 1800);
+}
+
+// Actions — return true if action succeeded, false if rejected
+const ACTIONS = {
+  feed: () => {
+    if (stats.hunger > 90) { showMessage('もう おなかいっぱい…'); return false; }
+    stats.hunger = clamp(stats.hunger + 30);
+    stats.cleanliness = clamp(stats.cleanliness - 4);
+    showMessage('もぐもぐ🍚 おいしい！');
+    return true;
+  },
+  play: () => {
+    if (stats.energy < 15) { showMessage('つかれた…ねむい…'); return false; }
+    stats.happiness = clamp(stats.happiness + 25);
+    stats.energy = clamp(stats.energy - 15);
+    stats.hunger = clamp(stats.hunger - 8);
+    stats.cleanliness = clamp(stats.cleanliness - 5);
+    showMessage('たのしい🎾！');
+    return true;
+  },
+  sleep: () => {
+    if (stats.energy > 90) { showMessage('もう ねむくない！'); return false; }
+    stats.energy = clamp(stats.energy + 40);
+    stats.hunger = clamp(stats.hunger - 8);
+    showMessage('すやすや💤');
+    return true;
+  },
+  bath: () => {
+    if (stats.cleanliness > 90) { showMessage('ピカピカだよ！'); return false; }
+    stats.cleanliness = clamp(stats.cleanliness + 40);
+    stats.happiness = clamp(stats.happiness + 5);
+    showMessage('さっぱり🛁');
+    return true;
+  },
+  pet: () => {
+    stats.happiness = clamp(stats.happiness + 12);
+    showMessage('うれしい💖');
+    return true;
+  }
+};
+
+document.querySelectorAll('button.action').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const action = btn.dataset.action;
+    const ok = ACTIONS[action]();
+    if (ok) triggerActionAnimation(action);
+    updateUI();
+    await saveStats();
+  });
+});
+
+document.getElementById('reset-btn').addEventListener('click', async () => {
+  if (!confirm('セーブデータをリセットしますか？')) return;
+  stats = { ...DEFAULTS, lastUpdate: Date.now() };
+  updateUI();
+  await saveStats();
+  showMessage('リセットしました');
+});
+
+// Real-time decay (every 5 seconds)
+setInterval(async () => {
+  const perTick = 5 / 60; // 5 seconds as fraction of minute
+  stats.hunger = Math.max(0, stats.hunger - DECAY.hunger * perTick);
+  stats.energy = Math.max(0, stats.energy - DECAY.energy * perTick);
+  stats.happiness = Math.max(0, stats.happiness - DECAY.happiness * perTick);
+  stats.cleanliness = Math.max(0, stats.cleanliness - DECAY.cleanliness * perTick);
+  updateUI();
+  await saveStats();
+}, 5000);
+
+// Initialize
+loadStats();
+</script>
+</body>
+</html>
